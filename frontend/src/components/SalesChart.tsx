@@ -175,3 +175,5 @@ const SalesChart: React.FC<SalesChartProps> = ({
     </Card>
   );
 };
+
+export default SalesChart;

@@ -1,10 +1,11 @@
 from flask import Flask, jsonify
+from flask_cors import CORS
 import pandas as pd
 
 app = Flask(__name__)
+CORS(app)
 
 DATA_PATH = "data/sales.csv"
-
 
 @app.route("/")
 def home():

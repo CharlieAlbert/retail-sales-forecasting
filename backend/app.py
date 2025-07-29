@@ -76,7 +76,6 @@ def detect_sales_columns(df):
                         sales_columns.append(col)
     return sales_columns
 
-
 def process_uploaded_data(filepath, date_column, sales_column):
     """Process the uploaded CSV and return monthly aggregated data"""
     try:
@@ -242,7 +241,6 @@ def configure_columns():
     except Exception as e:
         return jsonify({"error": f"Configuration failed: {str(e)}"}), 500
 
-
 @app.route("/sales")
 def sales_data():
     """Get sales data from uploaded file or default data"""
@@ -370,6 +368,90 @@ def reset_dataset():
     except Exception as e:
         return jsonify({"error": f"Reset failed: {str(e)}"}), 500
 
+
+@app.route("/category-sales")
+def category_sales():
+    try:
+        if (
+            current_dataset["filepath"]
+            and current_dataset["date_column"]
+            and current_dataset["sales_column"]
+        ):
+            if current_dataset["filepath"].endswith(".csv"):
+                df = pd.read_csv(current_dataset["filepath"], encoding="utf-8")
+            else:
+                df = pd.read_excel(current_dataset["filepath"])
+        else:
+            DEFAULT_DATA_PATH = "data/sales.csv"
+            if os.path.exists(DEFAULT_DATA_PATH):
+                df = pd.read_csv(DEFAULT_DATA_PATH, encoding="latin1")
+            else:
+                return jsonify({"error": "No data available"}), 404
+            
+        sales_column = current_dataset["sales_column"] or "Sales"
+        if df[sales_column].dtype == "object":
+            df[sales_column] = pd.to_numeric(
+                df[sales_column].astype(str).str.replace(r"[^0-9.\-]", "", regex=True),
+                errors="coerce"
+            )
+
+        # Dropping missing values
+        df = df.dropna(subset=[sales_column, "Category"])
+
+        result = (
+            df.groupby("Category")[sales_column]
+            .sum()
+            .sort_values(ascending=False)
+            .reset_index()
+            .rename(columns={sales_column: "Sales"})
+        )
+
+        return jsonify(result.to_dict(orient="records"))
+
+    except Exception as e:
+        return jsonify({
+            "error": f"category sales failed: {str(e)}",
+        })
+    
+@app.route("/profit-trend")
+def profit_trend():
+    try:
+        if (
+            current_dataset["filepath"]
+            and current_dataset["date_column"]
+        ):
+            if current_dataset["filepath"].endswith(".csv"):
+                df = pd.read_csv(current_dataset["filepath"], encoding="utf-8")
+            else:
+                df = pd.read_excel(current_dataset["filepath"])
+            date_col = current_dataset["date_column"]
+        else:
+            DEFAULT_DATA_PATH = "data/sales.csv"
+            if os.path.exists(DEFAULT_DATA_PATH):
+                df = pd.read_csv(DEFAULT_DATA_PATH, encoding="latin1")
+                date_col = "Order Date"
+            else:
+                return jsonify({"error": "No data available"}), 404
+        
+        if "Profit" not in df.columns:
+            return jsonify({"error": "Profit column not found in dataset"}), 404
+        
+        df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+        df = df.dropna(subset=[date_col, "Profit"])
+
+        if df["Profit"].dtype == "object":
+            df["Profit"] = pd.to_numeric(
+                df["Profit"].astype(str).str.replace(r"[^0-9.\-]", "", regex=True),
+                errors="coerce"
+            )
+        
+        df["Month"] = df[date_col].dt.to_period("M").astype(str)
+        result = df.groupby("Month")["Profit"].sum().reset_index()
+
+        return jsonify(result.to_dict(orient="records"))
+
+    except Exception as e:
+        return jsonify({"error": f"Profit trend failed: {str(e)}"}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)

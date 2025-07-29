@@ -5,6 +5,7 @@ import os
 from datetime import datetime
 import uuid
 from werkzeug.utils import secure_filename
+import chardet
 
 app = Flask(__name__)
 CORS(app)
@@ -111,6 +112,12 @@ def process_uploaded_data(filepath, date_column, sales_column):
         raise Exception(f"Error processing data: {str(e)}")
 
 
+def detect_encoding(filepath):
+    with open(filepath, "rb") as f:
+        result = chardet.detect(f.read(10000))
+    return result["encoding"]
+
+
 @app.route("/")
 def home():
     return jsonify(
@@ -155,7 +162,9 @@ def upload_file():
         # Read and analyze the file
         try:
             if filename.endswith(".csv"):
-                df = pd.read_csv(filepath, encoding="utf-8")
+                encoding = detect_encoding(filepath)
+                print(encoding)
+                df = pd.read_csv(filepath, encoding=encoding or "latin1")
             else:
                 df = pd.read_excel(filepath)
         except UnicodeDecodeError:

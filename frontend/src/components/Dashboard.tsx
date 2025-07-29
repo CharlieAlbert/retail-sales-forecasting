@@ -329,7 +329,7 @@ const Dashboard: React.FC = () => {
 
         {/* Charts - Only show when data is available */}
         {state.salesData.length > 0 && (
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-8">
             <SalesChart
               data={state.salesData}
               loading={state.loading}

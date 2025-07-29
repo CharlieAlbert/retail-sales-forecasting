@@ -1,4 +1,4 @@
-import React from "react";
+import type React from "react";
 import {
   Card,
   CardContent,
@@ -6,15 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import { ResponsivePie } from "@nivo/pie";
 import { Package, TrendingUp } from "lucide-react";
 
 interface CategorySalesData {
@@ -40,15 +32,16 @@ const CategorySalesChart: React.FC<CategorySalesChartProps> = ({
     }).format(value);
   };
 
-  const formatTooltip = (value: number, name: string) => {
-    if (name === "Sales") {
-      return [formatCurrency(value), "Sales"];
-    }
-    return [value, name];
-  };
-
   const topCategory = data.length > 0 ? data[0] : null;
   const totalSales = data.reduce((sum, item) => sum + item.Sales, 0);
+
+  // Transform data for nivo pie chart
+  const pieData = data.map((item, index) => ({
+    id: item.Category,
+    label: item.Category,
+    value: item.Sales,
+    color: `hsl(${(index * 360) / data.length}, 70%, 50%)`,
+  }));
 
   if (loading) {
     return (
@@ -121,69 +114,116 @@ const CategorySalesChart: React.FC<CategorySalesChartProps> = ({
             </p>
           </div>
         </div>
-
         <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={data}
-              margin={{
-                top: 20,
-                right: 30,
-                left: 20,
-                bottom: 5,
-              }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis
-                dataKey="Category"
-                stroke="#666"
-                fontSize={12}
-                angle={-45}
-                textAnchor="end"
-                height={80}
-                interval={0}
-              />
-              <YAxis
-                stroke="#666"
-                fontSize={12}
-                tickFormatter={formatCurrency}
-              />
-              <Tooltip
-                formatter={formatTooltip}
-                labelStyle={{ color: "#374151" }}
-                contentStyle={{
-                  backgroundColor: "white",
-                  border: "1px solid #e5e7eb",
+          <ResponsivePie
+            data={pieData}
+            margin={{ top: 40, right: 80, bottom: 80, left: 80 }}
+            innerRadius={0.5}
+            padAngle={0.7}
+            cornerRadius={3}
+            activeOuterRadiusOffset={8}
+            borderWidth={1}
+            borderColor={{
+              from: "color",
+              modifiers: [["darker", 0.2]],
+            }}
+            arcLinkLabelsSkipAngle={10}
+            arcLinkLabelsTextColor="#333333"
+            arcLinkLabelsThickness={2}
+            arcLinkLabelsColor={{ from: "color" }}
+            arcLabelsSkipAngle={10}
+            arcLabelsTextColor={{
+              from: "color",
+              modifiers: [["darker", 2]],
+            }}
+            valueFormat={(value) => formatCurrency(value)}
+            tooltip={({ datum }) => (
+              <div
+                style={{
+                  background: "white",
+                  padding: "9px 12px",
+                  border: "1px solid #ccc",
                   borderRadius: "6px",
                   boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
                 }}
-              />
-              <Bar
-                dataKey="Sales"
-                fill="#3b82f6"
-                radius={[4, 4, 0, 0]}
-                name="Sales"
-              />
-            </BarChart>
-          </ResponsiveContainer>
+              >
+                <strong>{datum.label}</strong>
+                <br />
+                Sales: {formatCurrency(datum.value)}
+                <br />
+                {((datum.value / totalSales) * 100).toFixed(1)}% of total
+              </div>
+            )}
+            legends={[
+              {
+                anchor: "bottom",
+                direction: "row",
+                justify: false,
+                translateX: 0,
+                translateY: 56,
+                itemsSpacing: 0,
+                itemWidth: 100,
+                itemHeight: 18,
+                itemTextColor: "#999",
+                itemDirection: "left-to-right",
+                itemOpacity: 1,
+                symbolSize: 18,
+                symbolShape: "circle",
+                effects: [
+                  {
+                    on: "hover",
+                    style: {
+                      itemTextColor: "#000",
+                    },
+                  },
+                ],
+              },
+            ]}
+          />
         </div>
+        {(() => {
+          const top3Sales = data
+            .slice(0, 3)
+            .reduce((sum, item) => sum + item.Sales, 0);
+          const percentageTop3 = (top3Sales / totalSales) * 100;
 
-        {data.length > 5 && (
-          <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-            <div className="flex items-center gap-2 text-blue-800 text-sm">
-              <TrendingUp className="h-4 w-4" />
-              <span>
-                Showing top {data.length} categories. Top 3 represent{" "}
-                {(
-                  (data.slice(0, 3).reduce((sum, item) => sum + item.Sales, 0) /
-                    totalSales) *
-                  100
-                ).toFixed(1)}
-                % of total sales.
-              </span>
-            </div>
-          </div>
-        )}
+          // Check how evenly sales are distributed
+          const average = totalSales / data.length;
+          const variance =
+            data.reduce(
+              (sum, item) => sum + Math.pow(item.Sales - average, 2),
+              0
+            ) / data.length;
+          const stdDev = Math.sqrt(variance);
+
+          const isEven = stdDev / average < 0.15; // less than 15% deviation = even
+
+          if (isEven) {
+            return (
+              <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                <div className="flex items-center gap-2 text-blue-800 text-sm">
+                  <TrendingUp className="h-4 w-4" />
+                  <span>
+                    Sales are evenly distributed across the {data.length}{" "}
+                    categories, indicating a balanced product portfolio.
+                  </span>
+                </div>
+              </div>
+            );
+          } else {
+            return (
+              <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                <div className="flex items-center gap-2 text-blue-800 text-sm">
+                  <TrendingUp className="h-4 w-4" />
+                  <span>
+                    Top 3 categories contribute {percentageTop3.toFixed(1)}% of
+                    total sales, showing concentration in a few product lines.
+                  </span>
+                </div>
+              </div>
+            );
+          }
+        })()}
       </CardContent>
     </Card>
   );

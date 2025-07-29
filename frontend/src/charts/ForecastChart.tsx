@@ -1,15 +1,5 @@
-import React, { useEffect, useState } from "react";
-import {
-  ComposedChart,
-  Line,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from "recharts";
+import type React from "react";
+import { ResponsiveLine } from "@nivo/line";
 import {
   Card,
   CardContent,
@@ -19,7 +9,15 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, Target, Calendar } from "lucide-react";
-import { MonthlyForecast } from "@/lib/api";
+import { formatDate } from "@/lib/utils";
+
+interface MonthlyForecast {
+  data_source: string;
+  forecast: number;
+  forecast_period: string;
+  last_3_months: Record<string, number>;
+  method: string;
+}
 
 interface ForecastChartProps {
   data?: MonthlyForecast;
@@ -32,32 +30,47 @@ const transformForecastData = (forecastData: MonthlyForecast) => {
   const historicalData = forecastData.last_3_months || {};
   const historicalMonths = Object.keys(historicalData).sort();
 
-  const chartData = [];
+  // Create historical data series
+  const historicalSeries = historicalMonths.map((month) => ({
+    x: month,
+    y: historicalData[month],
+  }));
 
-  historicalMonths.forEach((month) => {
-    chartData.push({
-      month: month,
-      actualSales: historicalData[month],
-      type: "Historical",
-    });
-  });
-
+  // Get next month for forecast
   const lastMonth = historicalMonths[historicalMonths.length - 1];
   const nextMonth = getNextMonth(lastMonth);
 
-  chartData.push({
-    month: nextMonth,
-    forecastSales: forecastData.forecast,
-    method: forecastData.method,
-    type: "Forecast",
-  });
+  // Create forecast series (includes last historical point for smooth connection)
+  const lastHistoricalPoint = {
+    x: lastMonth,
+    y: historicalData[lastMonth],
+  };
 
-  return chartData;
+  const forecastSeries = [
+    lastHistoricalPoint,
+    {
+      x: nextMonth,
+      y: forecastData.forecast,
+    },
+  ];
+
+  return [
+    {
+      id: "Historical Sales",
+      color: "#3B82F6",
+      data: historicalSeries,
+    },
+    {
+      id: "Forecast",
+      color: "#8B5CF6",
+      data: forecastSeries,
+    },
+  ];
 };
 
 const getNextMonth = (lastMonth: string): string => {
   const [year, month] = lastMonth.split("-");
-  const date = new Date(parseInt(year), parseInt(month) - 1);
+  const date = new Date(Number.parseInt(year), Number.parseInt(month) - 1);
   date.setMonth(date.getMonth() + 1);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
     2,
@@ -65,48 +78,18 @@ const getNextMonth = (lastMonth: string): string => {
   )}`;
 };
 
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-lg min-w-[200px]">
-        <p className="font-medium text-gray-900 mb-2">{`Period: ${label}`}</p>
-        {payload.map((entry: any, index: number) => (
-          <div key={index} className="flex items-center gap-2">
-            <div
-              className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: entry.color }}
-            />
-            <span className="text-sm">
-              {entry.dataKey === "actualSales" &&
-                `Actual: $${entry.value?.toLocaleString()}`}
-              {entry.dataKey === "forecastSales" &&
-                `Forecast: $${entry.value?.toLocaleString()}`}
-            </span>
-          </div>
-        ))}
-        {payload[0]?.payload?.method && (
-          <p className="text-xs text-gray-500 mt-1">
-            Method: {payload[0].payload.method}
-          </p>
-        )}
-      </div>
-    );
-  }
-  return null;
-};
-
 const ForecastChart: React.FC<ForecastChartProps> = ({
   data,
   loading = false,
 }) => {
   const chartData = data ? transformForecastData(data) : [];
-
   const lastThreeValues = data ? Object.values(data.last_3_months) : [];
   const averageHistorical =
     lastThreeValues.length > 0
       ? lastThreeValues.reduce((sum, val) => sum + val, 0) /
         lastThreeValues.length
       : 0;
+
   const forecastValue = data?.forecast || 0;
   const growthFromAverage =
     averageHistorical > 0
@@ -179,7 +162,6 @@ const ForecastChart: React.FC<ForecastChartProps> = ({
             </div>
           </div>
         </div>
-
         {/* Method badge */}
         {data.method && (
           <div className="mt-3">
@@ -190,55 +172,189 @@ const ForecastChart: React.FC<ForecastChartProps> = ({
           </div>
         )}
       </CardHeader>
-
       <CardContent>
         <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart
-              data={chartData}
-              margin={{ top: 20, right: 30, left: 0, bottom: 0 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-              <XAxis
-                dataKey="month"
-                className="text-sm text-gray-600"
-                tick={{ fontSize: 12 }}
-                angle={-45}
-                textAnchor="end"
-                height={80}
-              />
-              <YAxis
-                className="text-sm text-gray-600"
-                tick={{ fontSize: 12 }}
-                tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend />
+          <ResponsiveLine
+            data={chartData}
+            margin={{ top: 50, right: 110, bottom: 50, left: 60 }}
+            xScale={{ type: "point" }}
+            yScale={{
+              type: "linear",
+              min: "auto",
+              max: "auto",
+              stacked: false,
+              reverse: false,
+            }}
+            yFormat={(value) => `$${Number(value).toLocaleString()}`}
+            curve="monotoneX"
+            axisTop={null}
+            axisRight={null}
+            axisBottom={{
+              tickSize: 5,
+              tickPadding: 5,
+              tickRotation: -45,
+              legend: "Month",
+              legendOffset: 46,
+              legendPosition: "middle",
+            }}
+            axisLeft={{
+              tickSize: 5,
+              tickPadding: 5,
+              tickRotation: 0,
+              legend: "Sales ($)",
+              legendOffset: -50,
+              legendPosition: "middle",
+              format: (value) => `$${(Number(value) / 1000).toFixed(0)}k`,
+            }}
+            pointSize={8}
+            pointColor={{ from: "serieColor" }}
+            pointBorderWidth={2}
+            pointBorderColor={{ from: "serieColor" }}
+            pointLabelYOffset={-12}
+            useMesh={true}
+            enableGridX={true}
+            enableGridY={true}
+            colors={["#3B82F6", "#8B5CF6"]}
+            lineWidth={3}
+            enableArea={false}
+            tooltip={({ point }) => (
+              <div
+                style={{
+                  background: "white",
+                  padding: "12px",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "8px",
+                  boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+                  minWidth: "200px",
+                }}
+              >
+                <div
+                  style={{
+                    fontWeight: "500",
+                    color: "#111827",
+                    marginBottom: "8px",
+                  }}
+                >
+                  Period: {formatDate(point.data.x as string)}
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    marginBottom: "4px",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "12px",
+                      height: "12px",
+                      borderRadius: "50%",
+                      backgroundColor: point.seriesColor,
+                    }}
+                  />
+                  <span style={{ fontSize: "14px" }}>
+                    {point.seriesId === "Historical Sales"
+                      ? "Actual"
+                      : "Forecast"}
+                    : ${Number(point.data.y).toLocaleString()}
+                  </span>
+                </div>
+                {point.seriesId === "Forecast" && data.method && (
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "#6B7280",
+                      marginTop: "4px",
+                    }}
+                  >
+                    Method: {data.method}
+                  </div>
+                )}
+              </div>
+            )}
+            theme={{
+              axis: {
+                ticks: {
+                  text: {
+                    fontSize: 12,
+                    fill: "#6B7280",
+                  },
+                },
+                legend: {
+                  text: {
+                    fontSize: 12,
+                    fill: "#374151",
+                    fontWeight: 500,
+                  },
+                },
+              },
+              grid: {
+                line: {
+                  stroke: "#E5E7EB",
+                  strokeWidth: 1,
+                  strokeDasharray: "3 3",
+                },
+              },
+            }}
+            legends={[
+              {
+                anchor: "bottom-right",
+                direction: "column",
+                justify: false,
+                translateX: 100,
+                translateY: 0,
+                itemsSpacing: 0,
+                itemDirection: "left-to-right",
+                itemWidth: 80,
+                itemHeight: 20,
+                itemOpacity: 0.75,
+                symbolSize: 12,
+                symbolShape: "circle",
+                symbolBorderColor: "rgba(0, 0, 0, .5)",
+                effects: [
+                  {
+                    on: "hover",
+                    style: {
+                      itemBackground: "rgba(0, 0, 0, .03)",
+                      itemOpacity: 1,
+                    },
+                  },
+                ],
+              },
+            ]}
+            // Custom line styles for different series
+            layers={[
+              "grid",
+              "markers",
+              "axes",
+              "areas",
+              ({ series, lineGenerator, xScale, yScale }) => {
+                return series.map((serie) => {
+                  const lineData = serie.data.map((d) => ({
+                    x: xScale(d.data.x),
+                    y: yScale(d.data.y),
+                  }));
 
-              {/* Historical sales as bars */}
-              <Bar
-                dataKey="actualSales"
-                name="Historical Sales"
-                fill="#3B82F6"
-                fillOpacity={0.6}
-                radius={[4, 4, 0, 0]}
-              />
-
-              {/* Forecast sales as line */}
-              <Line
-                type="monotone"
-                dataKey="forecastSales"
-                name="Forecast"
-                stroke="#8B5CF6"
-                strokeWidth={3}
-                strokeDasharray="5 5"
-                dot={{ fill: "#8B5CF6", strokeWidth: 2, r: 5 }}
-                activeDot={{ r: 7, stroke: "#8B5CF6", strokeWidth: 2 }}
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
+                  return (
+                    <path
+                      key={serie.id}
+                      d={lineGenerator(lineData) || ""}
+                      fill="none"
+                      stroke={serie.color}
+                      strokeWidth={3}
+                      strokeDasharray={serie.id === "Forecast" ? "8 4" : "none"}
+                    />
+                  );
+                });
+              },
+              "points",
+              "slices",
+              "mesh",
+              "legends",
+            ]}
+          />
         </div>
-
         {/* Forecast summary */}
         <div className="mt-4 p-4 bg-gray-50 rounded-lg">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
@@ -265,4 +381,4 @@ const ForecastChart: React.FC<ForecastChartProps> = ({
   );
 };
 
-export default ForecastChart
+export default ForecastChart;

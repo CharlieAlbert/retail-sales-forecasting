@@ -1,15 +1,5 @@
-import React from "react";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Area,
-  AreaChart,
-} from "recharts";
+import type React from "react";
+import { ResponsiveLine } from "@nivo/line";
 import {
   Card,
   CardContent,
@@ -18,7 +8,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { TrendingUp, DollarSign } from "lucide-react";
-import { MonthlySales } from "@/lib/api";
+
+interface MonthlySales {
+  Month: string;
+  Sales: number;
+}
 
 interface SalesChartProps {
   data?: MonthlySales[];
@@ -26,24 +20,10 @@ interface SalesChartProps {
   variant?: "line" | "area";
 }
 
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
-        <p className="font-medium text-gray-900">{`Month: ${label}`}</p>
-        <p className="text-blue-600">
-          {`Sales: $${payload[0].value.toLocaleString()}`}
-        </p>
-      </div>
-    );
-  }
-  return null;
-};
-
 const SalesChart: React.FC<SalesChartProps> = ({
   data = [],
   loading = false,
-  variant = "area",
+  variant = "line",
 }) => {
   const totalSales = data.reduce((sum, item) => sum + item.Sales, 0);
   const latestMonth = data[data.length - 1];
@@ -51,6 +31,18 @@ const SalesChart: React.FC<SalesChartProps> = ({
   const growth = previousMonth
     ? ((latestMonth?.Sales - previousMonth.Sales) / previousMonth.Sales) * 100
     : 0;
+
+  // Transform data for Nivo
+  const nivoData = [
+    {
+      id: "sales",
+      color: "#3B82F6",
+      data: data.map((item) => ({
+        x: item.Month,
+        y: item.Sales,
+      })),
+    },
+  ];
 
   if (loading) {
     return (
@@ -102,74 +94,137 @@ const SalesChart: React.FC<SalesChartProps> = ({
       </CardHeader>
       <CardContent>
         <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            {variant === "area" ? (
-              <AreaChart
-                data={data}
-                margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+          <ResponsiveLine
+            data={nivoData}
+            margin={{ top: 50, right: 50, bottom: 50, left: 50 }}
+            xScale={{
+              type: "time",
+              format: "%Y-%m",
+              useUTC: false,
+              precision: "month",
+            }}
+            xFormat="time:%Y-%m"
+            yScale={{
+              type: "linear",
+              min: "auto",
+              max: "auto",
+              stacked: false,
+              reverse: false,
+            }}
+            yFormat={(value) => `$${Number(value).toLocaleString()}`}
+            axisTop={null}
+            axisRight={null}
+            axisBottom={{
+              format: "%b %Y",
+              tickValues: "every 2 months",
+              tickSize: 5,
+              tickPadding: 5,
+              tickRotation: -45,
+              legend: "Month",
+              legendOffset: 46,
+              legendPosition: "middle",
+            }}
+            axisLeft={{
+              tickSize: 5,
+              tickPadding: 5,
+              tickRotation: 0,
+              legend: "Sales ($)",
+              legendOffset: -50,
+              legendPosition: "middle",
+              format: (value) => `$${(Number(value) / 1000).toFixed(0)}k`,
+            }}
+            pointSize={6}
+            pointColor="#3B82F6"
+            pointBorderWidth={2}
+            pointBorderColor={{ from: "serieColor" }}
+            pointLabelYOffset={-12}
+            enableArea={variant === "area"}
+            areaOpacity={0.15}
+            useMesh={true}
+            enableGridX={true}
+            enableGridY={true}
+            gridXValues="every 1 month"
+            curve="monotoneX"
+            lineWidth={3}
+            colors={["#3B82F6"]}
+            tooltip={({ point }) => (
+              <div
+                style={{
+                  background: "white",
+                  padding: "12px",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "8px",
+                  boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+                }}
               >
-                <defs>
-                  <linearGradient
-                    id="salesGradient"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.05} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                <XAxis
-                  dataKey="Month"
-                  className="text-sm text-gray-600"
-                  tick={{ fontSize: 12 }}
-                />
-                <YAxis
-                  className="text-sm text-gray-600"
-                  tick={{ fontSize: 12 }}
-                  tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Area
-                  type="monotone"
-                  dataKey="Sales"
-                  stroke="#3B82F6"
-                  strokeWidth={3}
-                  fill="url(#salesGradient)"
-                  dot={{ fill: "#3B82F6", strokeWidth: 2, r: 4 }}
-                  activeDot={{ r: 6, stroke: "#3B82F6", strokeWidth: 2 }}
-                />
-              </AreaChart>
-            ) : (
-              <LineChart
-                data={data}
-                margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                <XAxis
-                  dataKey="Month"
-                  className="text-sm text-gray-600"
-                  tick={{ fontSize: 12 }}
-                />
-                <YAxis
-                  className="text-sm text-gray-600"
-                  tick={{ fontSize: 12 }}
-                  tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Line
-                  type="monotone"
-                  dataKey="Sales"
-                  stroke="#3B82F6"
-                  strokeWidth={3}
-                  dot={{ fill: "#3B82F6", strokeWidth: 2, r: 4 }}
-                  activeDot={{ r: 6, stroke: "#3B82F6", strokeWidth: 2 }}
-                />
-              </LineChart>
+                <div
+                  style={{
+                    fontWeight: "300",
+                    color: "#111827",
+                    marginBottom: "4px",
+                  }}
+                >
+                  {new Date().toLocaleDateString("en-US", {
+                    year: "numeric",
+                    month: "long",
+                  })}
+                </div>
+                <div style={{ color: "#3B82F6", fontWeight: "500" }}>
+                  Sales: ${Number(point.data.y).toLocaleString()}
+                </div>
+              </div>
             )}
-          </ResponsiveContainer>
+            theme={{
+              axis: {
+                ticks: {
+                  text: {
+                    fontSize: 12,
+                    fill: "#6B7280",
+                  },
+                },
+                legend: {
+                  text: {
+                    fontSize: 12,
+                    fill: "#374151",
+                    fontWeight: 500,
+                  },
+                },
+              },
+              grid: {
+                line: {
+                  stroke: "#E5E7EB",
+                  strokeWidth: 1,
+                  strokeDasharray: "3 3",
+                },
+              },
+            }}
+            legends={[
+              {
+                anchor: "bottom-right",
+                direction: "column",
+                justify: false,
+                translateX: 100,
+                translateY: 0,
+                itemsSpacing: 0,
+                itemDirection: "left-to-right",
+                itemWidth: 80,
+                itemHeight: 20,
+                itemOpacity: 0.75,
+                symbolSize: 12,
+                symbolShape: "circle",
+                symbolBorderColor: "rgba(0, 0, 0, .5)",
+                effects: [
+                  {
+                    on: "hover",
+                    style: {
+                      itemBackground: "rgba(0, 0, 0, .03)",
+                      itemOpacity: 1,
+                    },
+                  },
+                ],
+              },
+            ]}
+          />
         </div>
       </CardContent>
     </Card>

@@ -5,6 +5,7 @@ import os
 from datetime import datetime
 import uuid
 from werkzeug.utils import secure_filename
+import chardet
 
 app = Flask(__name__)
 CORS(app)
@@ -76,6 +77,7 @@ def detect_sales_columns(df):
                         sales_columns.append(col)
     return sales_columns
 
+
 def process_uploaded_data(filepath, date_column, sales_column):
     """Process the uploaded CSV and return monthly aggregated data"""
     try:
@@ -109,6 +111,12 @@ def process_uploaded_data(filepath, date_column, sales_column):
 
     except Exception as e:
         raise Exception(f"Error processing data: {str(e)}")
+
+
+def detect_encoding(filepath):
+    with open(filepath, "rb") as f:
+        result = chardet.detect(f.read(10000))
+    return result["encoding"]
 
 
 @app.route("/")
@@ -155,7 +163,9 @@ def upload_file():
         # Read and analyze the file
         try:
             if filename.endswith(".csv"):
-                df = pd.read_csv(filepath, encoding="utf-8")
+                encoding = detect_encoding(filepath)
+                print(encoding)
+                df = pd.read_csv(filepath, encoding=encoding or "latin1")
             else:
                 df = pd.read_excel(filepath)
         except UnicodeDecodeError:
@@ -388,12 +398,12 @@ def category_sales():
                 df = pd.read_csv(DEFAULT_DATA_PATH, encoding="latin1")
             else:
                 return jsonify({"error": "No data available"}), 404
-            
+
         sales_column = current_dataset["sales_column"] or "Sales"
         if df[sales_column].dtype == "object":
             df[sales_column] = pd.to_numeric(
                 df[sales_column].astype(str).str.replace(r"[^0-9.\-]", "", regex=True),
-                errors="coerce"
+                errors="coerce",
             )
 
         # Dropping missing values
@@ -410,17 +420,17 @@ def category_sales():
         return jsonify(result.to_dict(orient="records"))
 
     except Exception as e:
-        return jsonify({
-            "error": f"category sales failed: {str(e)}",
-        })
-    
+        return jsonify(
+            {
+                "error": f"category sales failed: {str(e)}",
+            }
+        )
+
+
 @app.route("/profit-trend")
 def profit_trend():
     try:
-        if (
-            current_dataset["filepath"]
-            and current_dataset["date_column"]
-        ):
+        if current_dataset["filepath"] and current_dataset["date_column"]:
             if current_dataset["filepath"].endswith(".csv"):
                 df = pd.read_csv(current_dataset["filepath"], encoding="utf-8")
             else:
@@ -433,19 +443,19 @@ def profit_trend():
                 date_col = "Order Date"
             else:
                 return jsonify({"error": "No data available"}), 404
-        
+
         if "Profit" not in df.columns:
             return jsonify({"error": "Profit column not found in dataset"}), 404
-        
+
         df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
         df = df.dropna(subset=[date_col, "Profit"])
 
         if df["Profit"].dtype == "object":
             df["Profit"] = pd.to_numeric(
                 df["Profit"].astype(str).str.replace(r"[^0-9.\-]", "", regex=True),
-                errors="coerce"
+                errors="coerce",
             )
-        
+
         df["Month"] = df[date_col].dt.to_period("M").astype(str)
         result = df.groupby("Month")["Profit"].sum().reset_index()
 
@@ -453,6 +463,7 @@ def profit_trend():
 
     except Exception as e:
         return jsonify({"error": f"Profit trend failed: {str(e)}"}), 500
+
 
 if __name__ == "__main__":
     app.run(debug=True)

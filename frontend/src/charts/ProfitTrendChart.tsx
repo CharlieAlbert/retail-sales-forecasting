@@ -1,4 +1,6 @@
-import React from "react";
+import type React from "react";
+import { ResponsiveLine } from "@nivo/line";
+import { formatDate } from "@/lib/utils";
 import {
   Card,
   CardContent,
@@ -6,16 +8,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  ReferenceLine,
-} from "recharts";
 import { TrendingUp, TrendingDown, DollarSign } from "lucide-react";
 
 interface ProfitTrendData {
@@ -39,13 +31,6 @@ const ProfitTrendChart: React.FC<ProfitTrendChartProps> = ({
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(value);
-  };
-
-  const formatTooltip = (value: number, name: string) => {
-    if (name === "Profit") {
-      return [formatCurrency(value), "Profit"];
-    }
-    return [value, name];
   };
 
   // Calculate metrics
@@ -76,6 +61,18 @@ const ProfitTrendChart: React.FC<ProfitTrendChartProps> = ({
   // Find months with negative profit
   const negativeMonths = data.filter((item) => item.Profit < 0).length;
   const profitableMonths = data.length - negativeMonths;
+
+  // Transform data for Nivo
+  const nivoData = [
+    {
+      id: "profit",
+      color: "#10b981",
+      data: data.map((item) => ({
+        x: item.Month,
+        y: item.Profit,
+      })),
+    },
+  ];
 
   if (loading) {
     return (
@@ -171,57 +168,163 @@ const ProfitTrendChart: React.FC<ProfitTrendChartProps> = ({
             </p>
           </div>
         </div>
-
         <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart
-              data={data}
-              margin={{
-                top: 20,
-                right: 30,
-                left: 20,
-                bottom: 5,
-              }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis
-                dataKey="Month"
-                stroke="#666"
-                fontSize={12}
-                angle={-45}
-                textAnchor="end"
-                height={60}
-              />
-              <YAxis
-                stroke="#666"
-                fontSize={12}
-                tickFormatter={formatCurrency}
-              />
-              <Tooltip
-                formatter={formatTooltip}
-                labelStyle={{ color: "#374151" }}
-                contentStyle={{
-                  backgroundColor: "white",
-                  border: "1px solid #e5e7eb",
-                  borderRadius: "6px",
-                  boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
-                }}
-              />
-              {/* Zero line reference */}
-              <ReferenceLine y={0} stroke="#dc2626" strokeDasharray="2 2" />
-              <Line
-                type="monotone"
-                dataKey="Profit"
-                stroke="#10b981"
-                strokeWidth={3}
-                dot={{ fill: "#10b981", strokeWidth: 2, r: 4 }}
-                activeDot={{ r: 6, stroke: "#10b981", strokeWidth: 2 }}
-                name="Profit"
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          <ResponsiveLine
+            data={nivoData}
+            margin={{ top: 50, right: 50, bottom: 50, left: 60 }}
+            xScale={{ type: "point" }}
+            yScale={{
+              type: "linear",
+              min: "auto",
+              max: "auto",
+              stacked: false,
+              reverse: false,
+            }}
+            yFormat={(value) => formatCurrency(Number(value))}
+            curve="monotoneX"
+            axisTop={null}
+            axisRight={null}
+            axisBottom={{
+              tickSize: 5,
+              tickPadding: 5,
+              tickRotation: -45,
+              legend: "Month",
+              legendOffset: 46,
+              legendPosition: "middle",
+            }}
+            axisLeft={{
+              tickSize: 5,
+              tickPadding: 5,
+              tickRotation: 0,
+              legend: "Profit ($)",
+              legendOffset: -50,
+              legendPosition: "middle",
+              format: (value) => formatCurrency(Number(value)),
+            }}
+            pointSize={6}
+            pointColor="#10b981"
+            pointBorderWidth={2}
+            pointBorderColor="#10b981"
+            pointLabelYOffset={-12}
+            useMesh={true}
+            enableGridX={true}
+            enableGridY={true}
+            colors={["#10b981"]}
+            lineWidth={3}
+            enableArea={false}
+            // Add zero reference line using markers
+            markers={[
+              {
+                axis: "y",
+                value: 0,
+                lineStyle: {
+                  stroke: "#dc2626",
+                  strokeWidth: 2,
+                  strokeDasharray: "4 4",
+                },
+                legend: "Break Even",
+                legendOrientation: "horizontal",
+                legendPosition: "top-right",
+              },
+            ]}
+            tooltip={({ point }) => {
+              return (
+                <div
+                  style={{
+                    background: "white",
+                    padding: "12px",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "8px",
+                    boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontWeight: "300",
+                      color: "#111827",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    {formatDate(point.data.x as string)}
+                  </div>
+                  <div
+                    style={{
+                      color: Number(point.data.y) >= 0 ? "#10b981" : "#dc2626",
+                      fontWeight: "500",
+                    }}
+                  >
+                    Profit: {formatCurrency(Number(point.data.y))}
+                  </div>
+                  {Number(point.data.y) < 0 && (
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        color: "#dc2626",
+                        marginTop: "4px",
+                      }}
+                    >
+                      Loss Period
+                    </div>
+                  )}
+                </div>
+              );
+            }}
+            theme={{
+              axis: {
+                ticks: {
+                  text: {
+                    fontSize: 12,
+                    fill: "#6B7280",
+                  },
+                },
+                legend: {
+                  text: {
+                    fontSize: 12,
+                    fill: "#374151",
+                    fontWeight: 500,
+                  },
+                },
+              },
+              grid: {
+                line: {
+                  stroke: "#f0f0f0",
+                  strokeWidth: 1,
+                  strokeDasharray: "3 3",
+                },
+              },
+            }}
+            // Custom layer to color points based on positive/negative values
+            layers={[
+              "grid",
+              "markers",
+              "axes",
+              "areas",
+              "crosshair",
+              "lines",
+              ({ series, xScale, yScale }) => {
+                return series.map((serie) =>
+                  serie.data.map((point, index) => {
+                    const isNegative = Number(point.data.y) < 0;
+                    return (
+                      <circle
+                        key={`${serie.id}-${index}`}
+                        cx={xScale(point.data.x)}
+                        cy={yScale(point.data.y)}
+                        r={6}
+                        fill={isNegative ? "#dc2626" : "#10b981"}
+                        stroke={isNegative ? "#dc2626" : "#10b981"}
+                        strokeWidth={2}
+                      />
+                    );
+                  })
+                );
+              },
+              "slices",
+              "mesh",
+              "legends",
+            ]}
+          />
         </div>
-
         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
           {negativeMonths > 0 && (
             <div className="p-3 bg-red-50 rounded-lg">
@@ -234,7 +337,6 @@ const ProfitTrendChart: React.FC<ProfitTrendChartProps> = ({
               </div>
             </div>
           )}
-
           {profitableMonths === data.length && (
             <div className="p-3 bg-green-50 rounded-lg">
               <div className="flex items-center gap-2 text-green-800 text-sm">

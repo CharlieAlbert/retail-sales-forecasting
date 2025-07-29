@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import SalesChart from "./SalesChart";
 import ForecastChart from "./ForecastChart";
+import FileUpload from "./FileUpload";
 import {
   getSales,
   getForecast,
@@ -31,6 +32,7 @@ interface DashboardState {
   loading: boolean;
   error: string | null;
   lastUpdated: Date | null;
+  dataSource: "default" | "uploaded";
 }
 
 const Dashboard: React.FC = () => {
@@ -40,6 +42,7 @@ const Dashboard: React.FC = () => {
     loading: true,
     error: null,
     lastUpdated: null,
+    dataSource: "default",
   });
 
   const fetchData = async () => {
@@ -55,6 +58,10 @@ const Dashboard: React.FC = () => {
         getForecast(),
       ]);
 
+      // Determine data source from forecast response
+      const dataSource =
+        forecastResponse?.data_source === "uploaded" ? "uploaded" : "default";
+
       setState((prev) => ({
         ...prev,
         salesData: salesResponse,
@@ -64,6 +71,7 @@ const Dashboard: React.FC = () => {
         loading: false,
         lastUpdated: new Date(),
         error: null,
+        dataSource,
       }));
     } catch (error) {
       setState((prev) => ({
@@ -75,6 +83,11 @@ const Dashboard: React.FC = () => {
             : "An unexpected error occurred",
       }));
     }
+  };
+
+  const handleDataConfigured = () => {
+    // Refresh data when new file is uploaded and configured
+    fetchData();
   };
 
   useEffect(() => {
@@ -114,6 +127,13 @@ const Dashboard: React.FC = () => {
               <p className="text-gray-600 mt-1">
                 Real-time sales analytics and predictive insights
               </p>
+              {state.dataSource === "uploaded" && (
+                <div className="mt-2">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    Using uploaded data
+                  </span>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-4">
               {state.lastUpdated && (
@@ -140,6 +160,9 @@ const Dashboard: React.FC = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* File Upload Section */}
+        <FileUpload onDataConfigured={handleDataConfigured} />
+
         {/* Error Alert */}
         {state.error && (
           <Alert className="mb-6 border-red-200 bg-red-50">
@@ -158,103 +181,124 @@ const Dashboard: React.FC = () => {
           </Alert>
         )}
 
-        {/* Key Metrics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                ${totalSales.toLocaleString()}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Across all recorded periods
-              </p>
-            </CardContent>
-          </Card>
+        {/* Show message when no data is available */}
+        {!state.loading && state.salesData.length === 0 && (
+          <Alert className="mb-6 border-blue-200 bg-blue-50">
+            <AlertCircle className="h-4 w-4 text-blue-600" />
+            <AlertDescription className="text-blue-800">
+              <strong>No data available.</strong> Please upload a CSV or Excel
+              file to get started with your sales analysis.
+            </AlertDescription>
+          </Alert>
+        )}
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Monthly Growth
-              </CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div
-                className={`text-2xl font-bold ${
-                  monthlyGrowth >= 0 ? "text-green-600" : "text-red-600"
-                }`}
-              >
-                {monthlyGrowth >= 0 ? "+" : ""}
-                {monthlyGrowth.toFixed(1)}%
-              </div>
-              <p className="text-xs text-muted-foreground">vs previous month</p>
-            </CardContent>
-          </Card>
+        {/* Key Metrics Cards - Only show when data is available */}
+        {state.salesData.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Total Sales
+                </CardTitle>
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  ${totalSales.toLocaleString()}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Across all recorded periods
+                </p>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Next Month Forecast
-              </CardTitle>
-              <Target className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-purple-600">
-                ${forecastValue.toLocaleString()}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                3-month moving average
-              </p>
-            </CardContent>
-          </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Monthly Growth
+                </CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div
+                  className={`text-2xl font-bold ${
+                    monthlyGrowth >= 0 ? "text-green-600" : "text-red-600"
+                  }`}
+                >
+                  {monthlyGrowth >= 0 ? "+" : ""}
+                  {monthlyGrowth.toFixed(1)}%
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  vs previous month
+                </p>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Forecast Growth
-              </CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div
-                className={`text-2xl font-bold ${
-                  forecastGrowth >= 0 ? "text-green-600" : "text-red-600"
-                }`}
-              >
-                {forecastGrowth >= 0 ? "+" : ""}
-                {forecastGrowth.toFixed(1)}%
-              </div>
-              <p className="text-xs text-muted-foreground">
-                vs 3-month average
-              </p>
-            </CardContent>
-          </Card>
-        </div>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Next Month Forecast
+                </CardTitle>
+                <Target className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-purple-600">
+                  ${forecastValue.toLocaleString()}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  3-month moving average
+                </p>
+              </CardContent>
+            </Card>
 
-        {/* Charts */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-          <SalesChart
-            data={state.salesData}
-            loading={state.loading}
-            variant="area"
-          />
-          <ForecastChart
-            data={state.forecastData ?? undefined}
-            loading={state.loading}
-          />
-        </div>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Forecast Growth
+                </CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div
+                  className={`text-2xl font-bold ${
+                    forecastGrowth >= 0 ? "text-green-600" : "text-red-600"
+                  }`}
+                >
+                  {forecastGrowth >= 0 ? "+" : ""}
+                  {forecastGrowth.toFixed(1)}%
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  vs 3-month average
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
-        {/* Data Insights */}
+        {/* Charts - Only show when data is available */}
+        {state.salesData.length > 0 && (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+            <SalesChart
+              data={state.salesData}
+              loading={state.loading}
+              variant="area"
+            />
+            <ForecastChart
+              data={state.forecastData ?? undefined}
+              loading={state.loading}
+            />
+          </div>
+        )}
+
+        {/* Data Insights - Only show when data is available */}
         {!state.loading && state.salesData.length > 0 && state.forecastData && (
           <Card className="mt-8">
             <CardHeader>
               <CardTitle>Key Insights</CardTitle>
               <CardDescription>
-                Automated analysis based on sales data
+                Automated analysis based on{" "}
+                {state.dataSource === "uploaded" ? "your uploaded" : "default"}{" "}
+                sales data
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -272,6 +316,12 @@ const Dashboard: React.FC = () => {
                     <li>
                       • Average monthly sales: $
                       {(totalSales / state.salesData.length).toLocaleString()}
+                    </li>
+                    <li>
+                      • Data source:{" "}
+                      {state.dataSource === "uploaded"
+                        ? "Uploaded file"
+                        : "Default dataset"}
                     </li>
                   </ul>
                 </div>

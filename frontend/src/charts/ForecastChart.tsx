@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import React from "react";
 import { ResponsiveLine } from "@nivo/line";
 import {
@@ -311,7 +312,7 @@ const ForecastChart: React.FC<ForecastChartProps> = ({
                 <div className="flex items-center gap-2 mb-1">
                   <div
                     className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: point.serieColor }}
+                    style={{ backgroundColor: point.seriesColor }}
                   />
                   <span className="text-sm">
                     {point.seriesId}: ${Number(point.data.y).toLocaleString()}

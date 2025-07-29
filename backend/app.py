@@ -7,9 +7,9 @@ import uuid
 from werkzeug.utils import secure_filename
 import chardet
 import numpy as np
-from sklearn.linear_model import LinearRegression
+# from sklearn.linear_model import LinearRegression (moved to top)
 from sklearn.preprocessing import PolynomialFeatures
-from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -381,7 +381,6 @@ def forecast():
         trend_direction = "increasing" if trend_slope > 0 else "decreasing" if trend_slope < 0 else "stable"
         
         # R-squared for regression quality
-        from sklearn.metrics import r2_score
         regression_r2 = r2_score(y, reg_model.predict(X))
         
         # Prepare last 3 months data for frontend
@@ -392,8 +391,21 @@ def forecast():
             last_3_months[month_key] = float(month_data['Sales'])
         
         # Calculate confidence metrics
+        # Define volatility thresholds as named constants
+        HIGH_CONFIDENCE_THRESHOLD = 0.2
+        MEDIUM_CONFIDENCE_THRESHOLD = 0.4
+
+        def get_confidence_level(volatility, mean_sales):
+            if volatility < mean_sales * HIGH_CONFIDENCE_THRESHOLD:
+                return "high"
+            elif volatility < mean_sales * MEDIUM_CONFIDENCE_THRESHOLD:
+                return "medium"
+            else:
+                return "low"
+
         recent_volatility = np.std(last_3_sales) if len(last_3_sales) > 1 else 0
-        confidence_level = "high" if recent_volatility < np.mean(last_3_sales) * 0.2 else "medium" if recent_volatility < np.mean(last_3_sales) * 0.4 else "low"
+        mean_last_3_sales = np.mean(last_3_sales)
+        confidence_level = get_confidence_level(recent_volatility, mean_last_3_sales)
         
         return jsonify({
             "forecast": round(ensemble_forecast, 2),

@@ -304,7 +304,7 @@ const ForecastChart: React.FC<ForecastChartProps> = ({
             lineWidth={3}
             enableArea={false}
             tooltip={({ point }) => (
-              <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg min-w-48">
+              <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg forecast-tooltip">
                 <div className="font-medium text-gray-900 mb-2">
                   Period: {formatDate(point.data.x as string)}
                 </div>

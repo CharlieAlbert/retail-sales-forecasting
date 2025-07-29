@@ -15,20 +15,28 @@ import {
   Target,
   AlertCircle,
 } from "lucide-react";
-import SalesChart from "./SalesChart";
-import ForecastChart from "./ForecastChart";
+import SalesChart from "@/charts/SalesChart";
+import ForecastChart from "@/charts/ForecastChart";
+import CategorySalesChart from "@/charts/CategorySalesChart";
+import ProfitTrendChart from "@/charts/ProfitTrendChart";
 import FileUpload from "./FileUpload";
 import {
   getSales,
   getForecast,
   checkApiHealth,
+  getCategorySales,
+  getProfitTrend,
   MonthlySales,
   MonthlyForecast,
+  CategorySalesData,
+  ProfitTrendData,
 } from "@/lib/api";
 
 interface DashboardState {
   salesData: MonthlySales[];
   forecastData: MonthlyForecast | null;
+  categorySalesData: CategorySalesData[];
+  profitTrendData: ProfitTrendData[];
   loading: boolean;
   error: string | null;
   lastUpdated: Date | null;
@@ -39,6 +47,8 @@ const Dashboard: React.FC = () => {
   const [state, setState] = useState<DashboardState>({
     salesData: [],
     forecastData: null,
+    categorySalesData: [],
+    profitTrendData: [],
     loading: true,
     error: null,
     lastUpdated: null,
@@ -53,24 +63,66 @@ const Dashboard: React.FC = () => {
       await checkApiHealth();
 
       // Fetch both sales and forecast data
-      const [salesResponse, forecastResponse] = await Promise.all([
+      const [
+        salesResponse,
+        forecastResponse,
+        categorySalesResponse,
+        profitTrendResponse,
+      ] = await Promise.allSettled([
         getSales(),
         getForecast(),
+        getCategorySales(),
+        getProfitTrend(),
       ]);
+
+      // Handle successful responses
+      const salesData =
+        salesResponse.status === "fulfilled" ? salesResponse.value : [];
+      const forecastData =
+        forecastResponse.status === "fulfilled"
+          ? Array.isArray(forecastResponse.value)
+            ? forecastResponse.value[0]
+            : forecastResponse.value
+          : null;
+      const categorySalesData =
+        categorySalesResponse.status === "fulfilled"
+          ? categorySalesResponse.value
+          : [];
+      const profitTrendData =
+        profitTrendResponse.status === "fulfilled"
+          ? profitTrendResponse.value
+          : [];
+
+      // Check for any errors
+      const errors = [
+        salesResponse,
+        forecastResponse,
+        categorySalesResponse,
+        profitTrendResponse,
+      ]
+        .filter((response) => response.status === "rejected")
+        .map((response) => (response as PromiseRejectedResult).reason.message);
+
+      if (errors.length > 0 && salesData.length === 0) {
+        throw new Error(errors[0]); // Show first error if no sales data
+      }
 
       // Determine data source from forecast response
       const dataSource =
-        forecastResponse?.data_source === "uploaded" ? "uploaded" : "default";
+        forecastData?.data_source === "uploaded" ? "uploaded" : "default";
 
       setState((prev) => ({
         ...prev,
-        salesData: salesResponse,
-        forecastData: Array.isArray(forecastResponse)
-          ? forecastResponse[0]
-          : forecastResponse,
+        salesData,
+        forecastData,
+        categorySalesData,
+        profitTrendData,
         loading: false,
         lastUpdated: new Date(),
-        error: null,
+        error:
+          errors.length > 0
+            ? `Some data unavailable: ${errors.join(", ")}`
+            : null,
         dataSource,
       }));
     } catch (error) {
@@ -277,7 +329,7 @@ const Dashboard: React.FC = () => {
 
         {/* Charts - Only show when data is available */}
         {state.salesData.length > 0 && (
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
             <SalesChart
               data={state.salesData}
               loading={state.loading}
@@ -289,6 +341,18 @@ const Dashboard: React.FC = () => {
             />
           </div>
         )}
+
+        {/* Additional Charts - Category Sales and Profit Trend */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
+          <CategorySalesChart
+            data={state.categorySalesData}
+            loading={state.loading}
+          />
+          <ProfitTrendChart
+            data={state.profitTrendData}
+            loading={state.loading}
+          />
+        </div>
 
         {/* Data Insights - Only show when data is available */}
         {!state.loading && state.salesData.length > 0 && state.forecastData && (

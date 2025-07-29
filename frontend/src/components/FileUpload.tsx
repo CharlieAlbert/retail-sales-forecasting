@@ -9,14 +9,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import {
   Upload,
   File,
   CheckCircle,
@@ -35,7 +27,7 @@ interface UploadResponse {
   date_columns: string[];
   sales_columns: string[];
   row_count: number;
-  sample_data: Record<string, number>[];
+  sample_data: Record<string, unknown>[];
 }
 
 interface ConfigureResponse {
@@ -345,30 +337,27 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataConfigured }) => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label className="flex items-center gap-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                   <Calendar className="h-4 w-4" />
                   Date Column
-                </Label>
-                <Select
+                </label>
+                <select
                   value={selectedColumns.dateColumn}
-                  onValueChange={(value) =>
+                  onChange={(e) =>
                     setSelectedColumns((prev) => ({
                       ...prev,
-                      dateColumn: value,
+                      dateColumn: e.target.value,
                     }))
                   }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select date column" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {uploadState.uploadData?.date_columns.map((col) => (
-                      <SelectItem key={col} value={col}>
-                        {col}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <option value="">Select date column</option>
+                  {uploadState.uploadData?.date_columns.map((col) => (
+                    <option key={col} value={col}>
+                      {col}
+                    </option>
+                  ))}
+                </select>
                 <p className="text-xs text-gray-500">
                   Detected {uploadState.uploadData?.date_columns.length}{" "}
                   potential date columns
@@ -376,30 +365,27 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataConfigured }) => {
               </div>
 
               <div className="space-y-2">
-                <Label className="flex items-center gap-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
                   <DollarSign className="h-4 w-4" />
                   Sales Column
-                </Label>
-                <Select
+                </label>
+                <select
                   value={selectedColumns.salesColumn}
-                  onValueChange={(value) =>
+                  onChange={(e) =>
                     setSelectedColumns((prev) => ({
                       ...prev,
-                      salesColumn: value,
+                      salesColumn: e.target.value,
                     }))
                   }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select sales column" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {uploadState.uploadData?.sales_columns.map((col) => (
-                      <SelectItem key={col} value={col}>
-                        {col}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <option value="">Select sales column</option>
+                  {uploadState.uploadData?.sales_columns.map((col) => (
+                    <option key={col} value={col}>
+                      {col}
+                    </option>
+                  ))}
+                </select>
                 <p className="text-xs text-gray-500">
                   Detected {uploadState.uploadData?.sales_columns.length}{" "}
                   potential sales columns
@@ -409,7 +395,9 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataConfigured }) => {
 
             {uploadState.uploadData?.sample_data && (
               <div className="space-y-2">
-                <Label>Sample Data Preview</Label>
+                <label className="text-sm font-medium text-gray-700">
+                  Sample Data Preview
+                </label>
                 <div className="border rounded-lg overflow-hidden">
                   <div className="overflow-x-auto max-h-40">
                     <table className="w-full text-sm">

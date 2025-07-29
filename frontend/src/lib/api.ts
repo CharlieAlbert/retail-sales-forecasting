@@ -10,6 +10,16 @@ export type MonthlyForecast = {
   data_source?: "uploaded" | "default";
 };
 
+export type CategorySalesData = {
+  Category: string;
+  Sales: number;
+}
+
+export type ProfitTrendData = {
+  Month: string;
+  Profit: number;
+}
+
 const BASE_URL = "http://localhost:5000";
 
 export const handleApiError = async (response: Response) => {
@@ -47,6 +57,28 @@ export async function getForecast(): Promise<MonthlyForecast[]> {
 export async function checkApiHealth(): Promise<{ message: string }> {
   try {
     const response = await fetch(`${BASE_URL}/`);
+    await handleApiError(response);
+    return response.json();
+  } catch (error) {
+    console.error("API health check failed:", error);
+    throw error;
+  }
+}
+
+export async function getCategorySales() {
+  try {
+    const response = await fetch(`${BASE_URL}/category-sales`);
+    await handleApiError(response);
+    return response.json();
+  } catch (error) {
+    console.error("API health check failed:", error);
+    throw error;
+  }
+}
+
+export async function getProfitTrend() {
+  try {
+    const response = await fetch(`${BASE_URL}/profit-trend`);
     await handleApiError(response);
     return response.json();
   } catch (error) {

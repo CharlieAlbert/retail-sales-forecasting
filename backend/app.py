@@ -6,6 +6,12 @@ from datetime import datetime
 import uuid
 from werkzeug.utils import secure_filename
 import chardet
+import numpy as np
+# from sklearn.linear_model import LinearRegression (moved to top)
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+import warnings
+warnings.filterwarnings("ignore")
 
 app = Flask(__name__)
 CORS(app)
@@ -291,20 +297,19 @@ def sales_data():
 
 @app.route("/forecast")
 def forecast():
-    """Generate forecast from uploaded data or default data"""
+    """Generate forecast from uploaded data or default data using regression and moving averages"""
     try:
         # Get sales data (will use uploaded data if configured)
         sales_response = sales_data()
-
         if hasattr(sales_response, "status_code") and sales_response.status_code != 200:
             return sales_response
-
+        
         # Extract data from sales response
         if hasattr(sales_response, "get_json"):
             sales_data_list = sales_response.get_json()
         else:
             sales_data_list = sales_response
-
+            
         if not sales_data_list or len(sales_data_list) < 3:
             return (
                 jsonify(
@@ -314,28 +319,121 @@ def forecast():
                 ),
                 400,
             )
-
-        # Convert to pandas series for calculation
+        
+        # Convert to pandas DataFrame for analysis
         df = pd.DataFrame(sales_data_list)
-        monthly_sales = pd.Series(df["Sales"].values, index=df["Month"])
-
-        # Calculate 3-month moving average forecast
-        last_3 = monthly_sales.tail(3)
-        forecast_value = round(last_3.mean(), 2)
-
-        return jsonify(
-            {
-                "forecast": forecast_value,
-                "method": "3-month moving average",
-                "last_3_months": last_3.to_dict(),
-                "data_source": "uploaded" if current_dataset["filepath"] else "default",
-                "forecast_period": "next_month",
-            }
+        
+        # Ensure Month column is datetime and sort by date
+        df['Month'] = pd.to_datetime(df['Month'])
+        df = df.sort_values('Month')
+        
+        # Create numeric index for regression (0, 1, 2, ...)
+        df['period_index'] = range(len(df))
+        
+        # Extract sales values
+        sales_values = df['Sales'].values
+        period_indices = df['period_index'].values
+        
+        # Method 1: Linear Regression Forecast
+        from sklearn.linear_model import LinearRegression
+        
+        # Fit linear regression model
+        X = period_indices.reshape(-1, 1)
+        y = sales_values
+        
+        reg_model = LinearRegression()
+        reg_model.fit(X, y)
+        
+        # Predict next period (current max index + 1)
+        next_period = len(df)
+        regression_forecast = reg_model.predict([[next_period]])[0]
+        
+        # Method 2: Moving Average Forecasts
+        last_3_sales = sales_values[-3:]
+        moving_avg_3 = np.mean(last_3_sales)
+        
+        # If we have enough data, also calculate 6-month moving average
+        if len(sales_values) >= 6:
+            last_6_sales = sales_values[-6:]
+            moving_avg_6 = np.mean(last_6_sales)
+        else:
+            moving_avg_6 = moving_avg_3
+        
+        # Method 3: Weighted Moving Average (more recent months have higher weight)
+        if len(sales_values) >= 3:
+            weights = np.array([1, 2, 3])  # Most recent month gets highest weight
+            weighted_avg = np.average(last_3_sales, weights=weights)
+        else:
+            weighted_avg = moving_avg_3
+        
+        # Combine forecasts using ensemble approach
+        # Weight: 40% regression, 30% 3-month MA, 20% weighted MA, 10% 6-month MA
+        ensemble_forecast = (
+            0.4 * regression_forecast +
+            0.3 * moving_avg_3 +
+            0.2 * weighted_avg +
+            0.1 * moving_avg_6
         )
+        
+        # Calculate trend and seasonality metrics
+        # Linear trend slope
+        trend_slope = reg_model.coef_[0]
+        trend_direction = "increasing" if trend_slope > 0 else "decreasing" if trend_slope < 0 else "stable"
+        
+        # R-squared for regression quality
+        regression_r2 = r2_score(y, reg_model.predict(X))
+        
+        # Prepare last 3 months data for frontend
+        last_3_months = {}
+        for i in range(min(3, len(df))):
+            month_data = df.iloc[-(3-i)]
+            month_key = month_data['Month'].strftime('%Y-%m')
+            last_3_months[month_key] = float(month_data['Sales'])
+        
+        # Calculate confidence metrics
+        # Define volatility thresholds as named constants
+        HIGH_CONFIDENCE_THRESHOLD = 0.2
+        MEDIUM_CONFIDENCE_THRESHOLD = 0.4
 
+        def get_confidence_level(volatility, mean_sales):
+            if volatility < mean_sales * HIGH_CONFIDENCE_THRESHOLD:
+                return "high"
+            elif volatility < mean_sales * MEDIUM_CONFIDENCE_THRESHOLD:
+                return "medium"
+            else:
+                return "low"
+
+        recent_volatility = np.std(last_3_sales) if len(last_3_sales) > 1 else 0
+        mean_last_3_sales = np.mean(last_3_sales)
+        confidence_level = get_confidence_level(recent_volatility, mean_last_3_sales)
+        
+        return jsonify({
+            "forecast": round(ensemble_forecast, 2),
+            "method": "Ensemble (Regression + Moving Averages)",
+            "forecast_components": {
+                "linear_regression": round(regression_forecast, 2),
+                "moving_avg_3": round(moving_avg_3, 2),
+                "moving_avg_6": round(moving_avg_6, 2),
+                "weighted_avg": round(weighted_avg, 2)
+            },
+            "trend_analysis": {
+                "slope": round(trend_slope, 2),
+                "direction": trend_direction,
+                "r_squared": round(regression_r2, 3)
+            },
+            "confidence_metrics": {
+                "level": confidence_level,
+                "volatility": round(recent_volatility, 2)
+            },
+            "last_3_months": last_3_months,
+            "data_source": "uploaded" if current_dataset["filepath"] else "default",
+            "forecast_period": "next_month",
+        })
+        
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
+        # Log the full error for debugging
+        print(f"Forecast error: {str(e)}")
+        return jsonify({"error": f"Forecasting failed: {str(e)}"}), 500
 
 @app.route("/dataset/info")
 def dataset_info():
@@ -421,7 +519,7 @@ def category_sales():
         return jsonify({
             "error": f"category sales failed: {str(e)}",
         })
-    
+
 @app.route("/profit-trend")
 def profit_trend():
     try:

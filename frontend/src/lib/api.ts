@@ -7,6 +7,7 @@ export type MonthlyForecast = {
   forecast: number;
   method: string;
   last_3_months: Record<string, number>;
+  data_source?: "uploaded" | "default";
 };
 
 const BASE_URL = "http://localhost:5000";

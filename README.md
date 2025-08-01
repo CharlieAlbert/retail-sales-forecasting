@@ -180,7 +180,7 @@ sales-forecasting-app/
 ## 📜 License
 
 MIT License  
-© 2025 Your Name or Organization
+© 2025 CharlieAlbert
 
 ---
 
